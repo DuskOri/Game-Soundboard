@@ -7,9 +7,7 @@ _internal/
 
 # PyInstaller output
 build/
-build-*/
 dist/
-dist-*/
 *.spec
 
 # Local settings and editor files

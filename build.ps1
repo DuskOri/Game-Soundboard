@@ -1,8 +1,9 @@
 $ErrorActionPreference = "Stop"
 $projectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$distDir = Join-Path $projectDir "dist-new"
-$specDir = Join-Path $projectDir "build-spec"
-$workDir = Join-Path $projectDir "build-new"
+$buildDir = Join-Path $projectDir "build"
+$distDir = Join-Path $projectDir "dist\current"
+$specDir = Join-Path $buildDir "spec"
+$workDir = Join-Path $buildDir "work"
 $ffmpeg = (Get-Command ffmpeg.exe -ErrorAction Stop).Source
 New-Item -ItemType Directory -Path $specDir -Force | Out-Null
 
