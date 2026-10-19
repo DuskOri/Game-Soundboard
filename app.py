@@ -10,7 +10,7 @@ import time
 import tkinter as tk
 from ctypes import wintypes
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 import numpy as np
 import sounddevice as sd
@@ -248,6 +248,9 @@ class SoundboardApp(TkinterDnD.Tk):
         self.saved_pack = None
         self.custom_hotkey_targets = {}
         self.custom_hotkeys = {}
+        self.tab_buttons = {}
+        self.drag_audio_index = None
+        self.drag_target_pack = None
         self.config_path = data_dir() / "settings.json"
         self.hotkey_stop = threading.Event()
         self.hotkey_thread = None
@@ -345,6 +348,9 @@ class SoundboardApp(TkinterDnD.Tk):
         self.listbox = tk.Listbox(list_frame, activestyle="dotbox", selectmode="browse", font=("Segoe UI", 10))
         self.listbox.grid(row=0, column=0, sticky="nsew")
         self.listbox.bind("<Double-Button-1>", lambda _event: self.play_selected())
+        self.listbox.bind("<ButtonPress-1>", self.begin_audio_drag, add="+")
+        self.listbox.bind("<B1-Motion>", self.update_audio_drag, add="+")
+        self.listbox.bind("<ButtonRelease-1>", self.finish_audio_drag, add="+")
         self.listbox.drop_target_register(DND_FILES)
         self.listbox.dnd_bind("<<Drop>>", self.on_drop)
         scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.listbox.yview)
@@ -353,6 +359,7 @@ class SoundboardApp(TkinterDnD.Tk):
 
         buttons = ttk.Frame(outer, padding=(0, 10, 0, 0))
         buttons.pack(fill="x")
+        ttk.Button(buttons, text="新增语音包", command=self.create_pack).pack(side="left")
         ttk.Button(buttons, text="添加音频", command=self.add_files).pack(side="left")
         ttk.Button(buttons, text="刷新素材库", command=self.refresh_library).pack(side="left", padx=8)
         ttk.Button(buttons, text="打开素材文件夹", command=self.open_library).pack(side="left")
@@ -617,7 +624,6 @@ class SoundboardApp(TkinterDnD.Tk):
             )
             for pack_dir in pack_dirs
         }
-        self.packs = {name: files for name, files in self.packs.items() if files}
         self.pack_names = list(self.packs)
         preferred = self.current_pack or self.saved_pack
         self.current_pack = preferred if preferred in self.packs else (self.pack_names[0] if self.pack_names else None)
@@ -651,6 +657,7 @@ class SoundboardApp(TkinterDnD.Tk):
     def render_tabs(self):
         for child in self.tabs_inner.winfo_children():
             child.destroy()
+        self.tab_buttons = {}
         self.pack_menu.delete(0, "end")
         for name in self.pack_names:
             active = name == self.current_pack
@@ -664,6 +671,7 @@ class SoundboardApp(TkinterDnD.Tk):
                 pady=4,
             )
             button.pack(side="left", padx=(0, 3))
+            self.tab_buttons[name] = button
             self.pack_menu.add_command(label=name, command=lambda value=name: self.select_pack(value))
         self.update_idletasks()
         self.update_tab_scrollregion()
@@ -699,6 +707,87 @@ class SoundboardApp(TkinterDnD.Tk):
             if path in files:
                 return name
         return None
+
+    def create_pack(self):
+        name = simpledialog.askstring("新增语音包", "请输入语音包名称：", parent=self)
+        if name is None:
+            return
+        name = name.strip()
+        if not name or any(char in name for char in '<>:"/\\|?*') or name.endswith((".", " ")):
+            messagebox.showwarning(APP_NAME, "名称不能为空，也不能包含 Windows 文件名禁用字符。")
+            return
+        pack_dir = library_dir() / name
+        if pack_dir.exists():
+            messagebox.showinfo(APP_NAME, f"语音包“{name}”已经存在。")
+            self.refresh_library()
+            self.select_pack(name)
+            return
+        try:
+            pack_dir.mkdir()
+            self.current_pack = name
+            self.refresh_library()
+            self.status_var.set(f"已创建语音包：{name}")
+            self.save_config()
+        except OSError as exc:
+            messagebox.showerror(APP_NAME, f"无法创建语音包：\n{exc}")
+
+    def begin_audio_drag(self, event):
+        index = self.listbox.nearest(event.y)
+        bbox = self.listbox.bbox(index)
+        self.drag_audio_index = index if bbox and bbox[1] <= event.y < bbox[1] + bbox[3] else None
+        self.drag_target_pack = None
+
+    def update_audio_drag(self, event):
+        if self.drag_audio_index is None:
+            return
+        widget = self.winfo_containing(event.x_root, event.y_root)
+        target = next((name for name, button in self.tab_buttons.items() if widget == button), None)
+        if target == self.current_pack:
+            target = None
+        if target != self.drag_target_pack:
+            previous = self.drag_target_pack
+            self.drag_target_pack = target
+            if previous in self.tab_buttons:
+                active = previous == self.current_pack
+                self.tab_buttons[previous].configure(
+                    bg="#d9eaff" if active else "SystemButtonFace",
+                    relief="sunken" if active else "raised",
+                )
+            if target in self.tab_buttons:
+                self.tab_buttons[target].configure(bg="#fff0b3", relief="sunken")
+        canvas_x = event.x_root - self.tabs_canvas.winfo_rootx()
+        if 0 <= canvas_x < 24:
+            self.scroll_tabs(-1)
+        elif self.tabs_canvas.winfo_width() - 24 < canvas_x <= self.tabs_canvas.winfo_width():
+            self.scroll_tabs(1)
+
+    def finish_audio_drag(self, _event):
+        index = self.drag_audio_index
+        target = self.drag_target_pack
+        self.drag_audio_index = None
+        self.drag_target_pack = None
+        if index is None or target is None or index >= len(self.files):
+            self.render_tabs()
+            return
+        self.move_audio_to_pack(index, target)
+
+    def move_audio_to_pack(self, index, target_pack):
+        source = Path(self.files[index])
+        old_key = self.relative_key(source)
+        target_dir = library_dir() / target_pack
+        target_dir.mkdir(parents=True, exist_ok=True)
+        destination = self.available_destination(source.name, target_dir)
+        try:
+            shutil.move(str(source), str(destination))
+            binding = self.custom_hotkeys.pop(old_key, None)
+            if binding:
+                self.custom_hotkeys[self.relative_key(destination)] = binding
+            self.refresh_library()
+            self.status_var.set(f"已将“{source.name}”移动到“{target_pack}”")
+            self.save_config()
+        except OSError as exc:
+            messagebox.showerror(APP_NAME, f"无法移动音频：\n{exc}")
+            self.refresh_library()
 
     @staticmethod
     def relative_key(path):
