@@ -1,0 +1,4 @@
+numpy==2.0.2
+sounddevice==0.5.3
+pyinstaller==6.16.0
+tkinterdnd2==0.4.3
