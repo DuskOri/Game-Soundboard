@@ -349,8 +349,8 @@ class SoundboardApp(TkinterDnD.Tk):
         self.listbox.grid(row=0, column=0, sticky="nsew")
         self.listbox.bind("<Double-Button-1>", lambda _event: self.play_selected())
         self.listbox.bind("<ButtonPress-1>", self.begin_audio_drag, add="+")
-        self.listbox.bind("<B1-Motion>", self.update_audio_drag, add="+")
-        self.listbox.bind("<ButtonRelease-1>", self.finish_audio_drag, add="+")
+        self.bind_all("<B1-Motion>", self.update_audio_drag, add="+")
+        self.bind_all("<ButtonRelease-1>", self.finish_audio_drag, add="+")
         self.listbox.drop_target_register(DND_FILES)
         self.listbox.dnd_bind("<<Drop>>", self.on_drop)
         scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.listbox.yview)
@@ -371,7 +371,7 @@ class SoundboardApp(TkinterDnD.Tk):
 
         ttk.Label(
             outer,
-            text="Num1～Num9 播放当前语音包前 9 条；Alt+←/→ 切换语音包；Num0 停止。",
+            text="按住音频拖到上方标签可移动；Num1～Num9 播放前 9 条；Alt+←/→ 切换语音包；Num0 停止。",
             foreground="#555555",
         ).pack(fill="x", pady=(12, 0))
 
@@ -736,12 +736,21 @@ class SoundboardApp(TkinterDnD.Tk):
         bbox = self.listbox.bbox(index)
         self.drag_audio_index = index if bbox and bbox[1] <= event.y < bbox[1] + bbox[3] else None
         self.drag_target_pack = None
+        if self.drag_audio_index is not None:
+            self.listbox.configure(cursor="hand2")
 
     def update_audio_drag(self, event):
         if self.drag_audio_index is None:
             return
-        widget = self.winfo_containing(event.x_root, event.y_root)
-        target = next((name for name, button in self.tab_buttons.items() if widget == button), None)
+        target = next(
+            (
+                name
+                for name, button in self.tab_buttons.items()
+                if button.winfo_rootx() <= event.x_root < button.winfo_rootx() + button.winfo_width()
+                and button.winfo_rooty() <= event.y_root < button.winfo_rooty() + button.winfo_height()
+            ),
+            None,
+        )
         if target == self.current_pack:
             target = None
         if target != self.drag_target_pack:
@@ -766,6 +775,7 @@ class SoundboardApp(TkinterDnD.Tk):
         target = self.drag_target_pack
         self.drag_audio_index = None
         self.drag_target_pack = None
+        self.listbox.configure(cursor="")
         if index is None or target is None or index >= len(self.files):
             self.render_tabs()
             return
