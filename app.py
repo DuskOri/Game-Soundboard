@@ -241,6 +241,7 @@ class SoundboardApp(TkinterDnD.Tk):
         self.files = []
         self.input_devices = []
         self.output_devices = []
+        self.monitor_devices = []
         self.decode_token = 0
         self.pack_names = []
         self.packs = {}
@@ -462,35 +463,80 @@ class SoundboardApp(TkinterDnD.Tk):
     def refresh_devices(self):
         try:
             devices = sd.query_devices()
-            self.input_devices = [(i, d["name"]) for i, d in enumerate(devices) if d["max_input_channels"] > 0]
-            self.output_devices = [(i, d["name"]) for i, d in enumerate(devices) if d["max_output_channels"] > 0]
+            hostapis = sd.query_hostapis()
+            compatible_inputs = [
+                (i, d["name"])
+                for i, d in enumerate(devices)
+                if d["max_input_channels"] > 0
+                and "WASAPI" in hostapis[d["hostapi"]]["name"]
+                and self.device_supports_rate(i, is_input=True)
+            ]
+            compatible_outputs = [
+                (i, d["name"])
+                for i, d in enumerate(devices)
+                if d["max_output_channels"] > 0
+                and "WASAPI" in hostapis[d["hostapi"]]["name"]
+                and self.device_supports_rate(i, is_input=False)
+            ]
+            self.input_devices = [device for device in compatible_inputs if "cable" not in device[1].lower()]
+            self.output_devices = [device for device in compatible_outputs if "cable input" in device[1].lower()]
+            self.monitor_devices = [device for device in compatible_outputs if "cable" not in device[1].lower()]
             self.input_combo["values"] = [self.device_label(x) for x in self.input_devices]
             self.output_combo["values"] = [self.device_label(x) for x in self.output_devices]
-            self.monitor_combo["values"] = [self.device_label(x) for x in self.output_devices]
+            self.monitor_combo["values"] = [self.device_label(x) for x in self.monitor_devices]
+
+            input_values = set(self.input_combo["values"])
+            output_values = set(self.output_combo["values"])
+            monitor_values = set(self.monitor_combo["values"])
+            if self.input_var.get() not in input_values:
+                self.input_var.set("")
+            if self.output_var.get() not in output_values:
+                self.output_var.set("")
+            if self.monitor_var.get() not in monitor_values:
+                self.monitor_var.set("")
 
             if not self.input_var.get() and self.input_devices:
                 default_input = sd.default.device[0]
                 default_device = self.find_device(self.input_devices, default_input)
-                preferred_input = self.prefer_wasapi(self.input_devices, default_device[1]) or default_device
-                self.input_var.set(self.device_label(preferred_input))
+                self.input_var.set(self.device_label(default_device))
             if not self.output_var.get() and self.output_devices:
-                cable_matches = [d for d in self.output_devices if "cable input" in d[1].lower()]
-                cable = self.prefer_wasapi(cable_matches) if cable_matches else None
                 default_output = sd.default.device[1]
-                self.output_var.set(self.device_label(cable or self.find_device(self.output_devices, default_output)))
-            if not self.monitor_var.get() and self.output_devices:
+                self.output_var.set(self.device_label(self.find_device(self.output_devices, default_output)))
+            if not self.monitor_var.get() and self.monitor_devices:
                 default_output = sd.default.device[1]
-                default_device = self.find_device(self.output_devices, default_output)
-                preferred_monitor = self.prefer_wasapi(self.output_devices, default_device[1]) or default_device
-                if "cable input" not in preferred_monitor[1].lower():
-                    self.monitor_var.set(self.device_label(preferred_monitor))
-            self.status_var.set("设备列表已刷新")
+                default_device = self.find_device(self.monitor_devices, default_output)
+                self.monitor_var.set(self.device_label(default_device))
+            self.status_var.set(
+                f"设备已简化：{len(self.input_devices)} 个麦克风，"
+                f"{len(self.output_devices)} 个虚拟输出，{len(self.monitor_devices)} 个监听设备"
+            )
         except Exception as exc:
             messagebox.showerror(APP_NAME, f"无法读取音频设备：\n{exc}")
 
     @staticmethod
     def device_label(device):
-        return f"[{device[0]}] {device[1]}"
+        name = device[1]
+        lowered = name.lower()
+        if "cable input" in lowered:
+            kind = "虚拟声卡输出"
+        elif "cable output" in lowered:
+            kind = "虚拟声卡输入"
+        elif any(word in lowered for word in ("microphone", "麦克风", "mic array")):
+            kind = "麦克风"
+        else:
+            kind = "耳机/扬声器"
+        return f"{kind} | {name}  [{device[0]}]"
+
+    @staticmethod
+    def device_supports_rate(index, is_input):
+        try:
+            if is_input:
+                sd.check_input_settings(device=index, channels=1, dtype="float32", samplerate=SAMPLE_RATE)
+            else:
+                sd.check_output_settings(device=index, channels=1, dtype="float32", samplerate=SAMPLE_RATE)
+            return True
+        except sd.PortAudioError:
+            return False
 
     @staticmethod
     def find_device(devices, index):
@@ -504,7 +550,7 @@ class SoundboardApp(TkinterDnD.Tk):
 
     @staticmethod
     def selected_index(label):
-        return int(label.split("]", 1)[0][1:])
+        return int(label.rsplit("[", 1)[1].rstrip("]"))
 
     def toggle_stream(self):
         if self.engine.running:
@@ -985,7 +1031,7 @@ class SoundboardApp(TkinterDnD.Tk):
         self.saved_pack = config.get("current_pack")
         self.restore_device(self.input_var, self.input_devices, config.get("input_device"))
         self.restore_device(self.output_var, self.output_devices, config.get("output_device"))
-        self.restore_device(self.monitor_var, self.output_devices, config.get("monitor_device"))
+        self.restore_device(self.monitor_var, self.monitor_devices, config.get("monitor_device"))
         self.monitor_enabled.set(bool(config.get("monitor_enabled", False)))
         self.monitor_mic.set(bool(config.get("monitor_mic", False)))
         self.monitor_sound.set(bool(config.get("monitor_sound", True)))
