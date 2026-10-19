@@ -17,12 +17,20 @@ try {
         --add-binary "$ffmpeg;." `
         --collect-all sounddevice `
         --collect-all tkinterdnd2 `
+        --exclude-module ssl `
         app.py
     if ($LASTEXITCODE -ne 0) {
         throw "PyInstaller failed with exit code $LASTEXITCODE"
     }
 } finally {
     Pop-Location
+}
+
+$tkdndDir = Join-Path $distDir "GameSoundboard\_internal\tkinterdnd2\tkdnd"
+if (Test-Path $tkdndDir) {
+    Get-ChildItem $tkdndDir -Directory |
+        Where-Object Name -ne "win-x64" |
+        Remove-Item -Recurse -Force
 }
 
 Write-Host "Build complete: $distDir\GameSoundboard\GameSoundboard.exe"
