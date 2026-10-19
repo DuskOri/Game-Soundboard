@@ -242,7 +242,11 @@ class SoundboardApp(TkinterDnD.Tk):
         self.input_devices = []
         self.output_devices = []
         self.decode_token = 0
-        self.hotkey_page = 0
+        self.pack_names = []
+        self.packs = {}
+        self.current_pack = None
+        self.saved_pack = None
+        self.custom_hotkey_targets = {}
         self.custom_hotkeys = {}
         self.config_path = data_dir() / "settings.json"
         self.hotkey_stop = threading.Event()
@@ -262,7 +266,6 @@ class SoundboardApp(TkinterDnD.Tk):
         self.mic_muted = tk.BooleanVar(value=False)
         self.loop = tk.BooleanVar(value=False)
         self.duck_mic = tk.BooleanVar(value=False)
-        self.page_var = tk.StringVar(value="快捷键组 1/1")
 
         self._build_ui()
         self.refresh_devices()
@@ -320,6 +323,21 @@ class SoundboardApp(TkinterDnD.Tk):
         ttk.Checkbutton(checks, text="监听麦克风", variable=self.monitor_mic, command=self.update_levels).pack(side="left", padx=(18, 0))
         ttk.Checkbutton(checks, text="监听素材", variable=self.monitor_sound, command=self.update_levels).pack(side="left", padx=(12, 0))
 
+        tabs = ttk.Frame(outer)
+        tabs.pack(fill="x", pady=(0, 6))
+        ttk.Button(tabs, text="‹", width=3, command=lambda: self.scroll_tabs(-1)).pack(side="left")
+        self.tabs_canvas = tk.Canvas(tabs, height=34, highlightthickness=0)
+        self.tabs_canvas.pack(side="left", fill="x", expand=True, padx=4)
+        self.tabs_inner = ttk.Frame(self.tabs_canvas)
+        self.tabs_window = self.tabs_canvas.create_window((0, 0), window=self.tabs_inner, anchor="nw")
+        self.tabs_inner.bind("<Configure>", self.update_tab_scrollregion)
+        self.tabs_canvas.bind("<Configure>", self.update_tab_view)
+        ttk.Button(tabs, text="›", width=3, command=lambda: self.scroll_tabs(1)).pack(side="left")
+        self.pack_menu_button = ttk.Menubutton(tabs, text="更多")
+        self.pack_menu = tk.Menu(self.pack_menu_button, tearoff=False)
+        self.pack_menu_button.configure(menu=self.pack_menu)
+        self.pack_menu_button.pack(side="left", padx=(4, 0))
+
         list_frame = ttk.Frame(outer)
         list_frame.pack(fill="both", expand=True)
         list_frame.columnconfigure(0, weight=1)
@@ -344,15 +362,9 @@ class SoundboardApp(TkinterDnD.Tk):
         ttk.Button(buttons, text="停止素材", command=self.stop_sound).pack(side="left")
         ttk.Label(buttons, textvariable=self.status_var).pack(side="right")
 
-        pages = ttk.Frame(outer, padding=(0, 8, 0, 0))
-        pages.pack(fill="x")
-        ttk.Button(pages, text="上一组", command=lambda: self.change_page(-1)).pack(side="left")
-        ttk.Label(pages, textvariable=self.page_var).pack(side="left", padx=12)
-        ttk.Button(pages, text="下一组", command=lambda: self.change_page(1)).pack(side="left")
-
         ttk.Label(
             outer,
-            text="Num1～Num9 播放当前组；Ctrl+Alt+←/→ 切换组；Num0 停止。窗口最小化后仍然有效。",
+            text="Num1～Num9 播放当前语音包前 9 条；Alt+←/→ 切换语音包；Num0 停止。",
             foreground="#555555",
         ).pack(fill="x", pady=(12, 0))
 
@@ -396,12 +408,16 @@ class SoundboardApp(TkinterDnD.Tk):
                 user32.UnregisterHotKey(None, hotkey_id)
 
     def hotkey_bindings(self):
-        bindings = [(100, 0, 0x60), (110, MOD_CONTROL | MOD_ALT, 0x25), (111, MOD_CONTROL | MOD_ALT, 0x27)]
+        bindings = [(100, 0, 0x60), (110, MOD_ALT, 0x25), (111, MOD_ALT, 0x27)]
         bindings.extend((100 + slot, 0, 0x60 + slot) for slot in range(1, 10))
-        for index, path in enumerate(self.files):
+        self.custom_hotkey_targets = {}
+        all_files = [path for name in self.pack_names for path in self.packs.get(name, [])]
+        for index, path in enumerate(all_files):
             binding = self.custom_hotkeys.get(self.relative_key(path))
             if binding and binding.get("key") in KEY_CODES:
-                bindings.append((1000 + index, int(binding.get("modifiers", 0)), KEY_CODES[binding["key"]]))
+                hotkey_id = 1000 + index
+                self.custom_hotkey_targets[hotkey_id] = path
+                bindings.append((hotkey_id, int(binding.get("modifiers", 0)), KEY_CODES[binding["key"]]))
         return bindings
 
     def handle_hotkey(self, hotkey_id):
@@ -409,20 +425,27 @@ class SoundboardApp(TkinterDnD.Tk):
             self.stop_sound()
             return
         if hotkey_id == 110:
-            self.change_page(-1)
+            self.change_pack(-1)
             return
         if hotkey_id == 111:
-            self.change_page(1)
+            self.change_pack(1)
             return
         if hotkey_id >= 1000:
-            index = hotkey_id - 1000
-            if 0 <= index < len(self.files):
+            path = self.custom_hotkey_targets.get(hotkey_id)
+            if path:
+                pack_name = self.pack_for_path(path)
+                if pack_name and pack_name != self.current_pack:
+                    self.select_pack(pack_name)
+                index = self.files.index(path) if path in self.files else -1
+            else:
+                index = -1
+            if index >= 0:
                 self.listbox.selection_clear(0, "end")
                 self.listbox.selection_set(index)
                 self.listbox.see(index)
                 self.play_index(index, notify=False)
             return
-        index = self.hotkey_page * 9 + hotkey_id - 101
+        index = hotkey_id - 101
         if 0 <= index < len(self.files):
             self.listbox.selection_clear(0, "end")
             self.listbox.selection_set(index)
@@ -531,26 +554,33 @@ class SoundboardApp(TkinterDnD.Tk):
         return event.action
 
     def import_paths(self, paths):
-        sources = []
+        imported = 0
+        skipped = 0
         for raw_path in paths:
             path = Path(raw_path)
             if path.is_dir():
-                sources.extend(p for p in path.rglob("*") if self.is_supported(p))
+                pack_dir = library_dir() / path.name
+                pack_dir.mkdir(parents=True, exist_ok=True)
+                for source in (p for p in path.rglob("*") if self.is_supported(p)):
+                    try:
+                        relative_parent = source.parent.relative_to(path)
+                        target_dir = pack_dir / relative_parent
+                        target_dir.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(source, self.available_destination(source.name, target_dir))
+                        imported += 1
+                    except OSError:
+                        skipped += 1
             elif self.is_supported(path):
-                sources.append(path)
-
-        imported = 0
-        skipped = 0
-        for source in sources:
-            try:
-                if source.resolve().parent == library_dir().resolve():
+                target_dir = library_dir() / (self.current_pack or "默认语音包")
+                target_dir.mkdir(parents=True, exist_ok=True)
+                try:
+                    if path.resolve().parent == target_dir.resolve():
+                        skipped += 1
+                    else:
+                        shutil.copy2(path, self.available_destination(path.name, target_dir))
+                        imported += 1
+                except OSError:
                     skipped += 1
-                    continue
-                destination = self.available_destination(source.name)
-                shutil.copy2(source, destination)
-                imported += 1
-            except OSError:
-                skipped += 1
 
         self.refresh_library()
         if imported:
@@ -565,12 +595,12 @@ class SoundboardApp(TkinterDnD.Tk):
         return path.is_file() and path.suffix.lower() in SUPPORTED_FILES
 
     @staticmethod
-    def available_destination(filename):
+    def available_destination(filename, target_dir):
         source_name = Path(filename)
-        destination = library_dir() / source_name.name
+        destination = target_dir / source_name.name
         counter = 2
         while destination.exists():
-            destination = library_dir() / f"{source_name.stem} ({counter}){source_name.suffix}"
+            destination = target_dir / f"{source_name.stem} ({counter}){source_name.suffix}"
             counter += 1
         return destination
 
@@ -579,12 +609,20 @@ class SoundboardApp(TkinterDnD.Tk):
         selected = self.listbox.curselection()
         if selected and selected[0] < len(self.files):
             selected_path = self.files[selected[0]]
-        self.files = sorted(
-            (str(path.resolve()) for path in library_dir().rglob("*") if self.is_supported(path)),
-            key=lambda value: str(Path(value).relative_to(library_dir())).casefold(),
-        )
-        page_count = max(1, (len(self.files) + 8) // 9)
-        self.hotkey_page = min(self.hotkey_page, page_count - 1)
+        pack_dirs = sorted((path for path in library_dir().iterdir() if path.is_dir()), key=lambda path: path.name.casefold())
+        self.packs = {
+            pack_dir.name: sorted(
+                (str(path.resolve()) for path in pack_dir.rglob("*") if self.is_supported(path)),
+                key=lambda value: str(Path(value).relative_to(pack_dir)).casefold(),
+            )
+            for pack_dir in pack_dirs
+        }
+        self.packs = {name: files for name, files in self.packs.items() if files}
+        self.pack_names = list(self.packs)
+        preferred = self.current_pack or self.saved_pack
+        self.current_pack = preferred if preferred in self.packs else (self.pack_names[0] if self.pack_names else None)
+        self.files = self.packs.get(self.current_pack, [])
+        self.render_tabs()
         self.render_library()
         if self.hotkey_thread and self.hotkey_thread.is_alive():
             self.hotkey_commands.put("refresh")
@@ -592,35 +630,75 @@ class SoundboardApp(TkinterDnD.Tk):
             index = self.files.index(selected_path)
             self.listbox.selection_set(index)
             self.listbox.see(index)
-        self.status_var.set(f"素材库：{len(self.files)} 个音频")
+        total = sum(len(files) for files in self.packs.values())
+        self.status_var.set(f"{len(self.pack_names)} 个语音包，共 {total} 条音频")
 
     def render_library(self):
         selected = self.listbox.curselection()
         selected_index = selected[0] if selected else None
         self.listbox.delete(0, "end")
-        page_start = self.hotkey_page * 9
-        page_end = page_start + 9
         for index, path in enumerate(self.files):
-            label = str(Path(path).relative_to(library_dir()))
+            label = str(Path(path).relative_to(library_dir() / self.current_pack))
             custom = self.custom_hotkeys.get(self.relative_key(path))
             if custom:
                 label = f"[{self.format_hotkey(custom)}]  {label}"
-            elif page_start <= index < page_end:
-                label = f"[Num{index - page_start + 1}]  {label}"
+            if index < 9:
+                label = f"[Num{index + 1}]  {label}"
             self.listbox.insert("end", label)
         if selected_index is not None and selected_index < len(self.files):
             self.listbox.selection_set(selected_index)
             self.listbox.see(selected_index)
-        page_count = max(1, (len(self.files) + 8) // 9)
-        self.page_var.set(f"快捷键组 {self.hotkey_page + 1}/{page_count}")
+    def render_tabs(self):
+        for child in self.tabs_inner.winfo_children():
+            child.destroy()
+        self.pack_menu.delete(0, "end")
+        for name in self.pack_names:
+            active = name == self.current_pack
+            button = tk.Button(
+                self.tabs_inner,
+                text=name,
+                command=lambda value=name: self.select_pack(value),
+                relief="sunken" if active else "raised",
+                bg="#d9eaff" if active else "SystemButtonFace",
+                padx=12,
+                pady=4,
+            )
+            button.pack(side="left", padx=(0, 3))
+            self.pack_menu.add_command(label=name, command=lambda value=name: self.select_pack(value))
+        self.update_idletasks()
+        self.update_tab_scrollregion()
 
-    def change_page(self, delta):
-        page_count = max(1, (len(self.files) + 8) // 9)
-        self.hotkey_page = (self.hotkey_page + delta) % page_count
+    def update_tab_scrollregion(self, _event=None):
+        self.tabs_canvas.configure(scrollregion=self.tabs_canvas.bbox("all"))
+
+    def update_tab_view(self, event=None):
+        if event:
+            self.tabs_canvas.itemconfigure(self.tabs_window, height=event.height)
+
+    def scroll_tabs(self, direction):
+        self.tabs_canvas.xview_scroll(direction * 3, "units")
+
+    def select_pack(self, name):
+        if name not in self.packs:
+            return
+        self.current_pack = name
+        self.files = self.packs[name]
+        self.render_tabs()
         self.render_library()
-        start = self.hotkey_page * 9 + 1
-        end = min(start + 8, len(self.files))
-        self.status_var.set(f"当前快捷键对应素材 {start}～{end}")
+        self.status_var.set(f"当前语音包：{name}（{len(self.files)} 条）")
+        self.save_config()
+
+    def change_pack(self, delta):
+        if not self.pack_names:
+            return
+        index = self.pack_names.index(self.current_pack) if self.current_pack in self.pack_names else 0
+        self.select_pack(self.pack_names[(index + delta) % len(self.pack_names)])
+
+    def pack_for_path(self, path):
+        for name, files in self.packs.items():
+            if path in files:
+                return name
+        return None
 
     @staticmethod
     def relative_key(path):
@@ -805,6 +883,7 @@ class SoundboardApp(TkinterDnD.Tk):
                 and binding.get("key") in tuple(f"Num{number}" for number in range(10))
             )
         }
+        self.saved_pack = config.get("current_pack")
         self.restore_device(self.input_var, self.input_devices, config.get("input_device"))
         self.restore_device(self.output_var, self.output_devices, config.get("output_device"))
         self.restore_device(self.monitor_var, self.output_devices, config.get("monitor_device"))
@@ -836,6 +915,7 @@ class SoundboardApp(TkinterDnD.Tk):
                 "sound_volume": self.sound_volume.get(),
                 "monitor_volume": self.monitor_volume.get(),
                 "custom_hotkeys": self.custom_hotkeys,
+                "current_pack": self.current_pack,
             }
             self.config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
         except OSError:
