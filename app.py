@@ -18,6 +18,7 @@ from tkinterdnd2 import DND_FILES, TkinterDnD
 
 
 APP_NAME = "Game Soundboard"
+APP_VERSION = "1.1"
 SAMPLE_RATE = 48000
 BLOCK_SIZE = 960
 SUPPORTED_FILES = (".wav", ".mp3", ".ogg", ".flac", ".m4a", ".aac", ".wma", ".opus")
@@ -232,7 +233,7 @@ class AudioEngine:
 class SoundboardApp(TkinterDnD.Tk):
     def __init__(self):
         super().__init__()
-        self.title(APP_NAME)
+        self.title(f"{APP_NAME} v{APP_VERSION}")
         self.geometry("820x590")
         self.minsize(700, 520)
         self.protocol("WM_DELETE_WINDOW", self.on_close)
