@@ -18,7 +18,7 @@ from tkinterdnd2 import DND_FILES, TkinterDnD
 
 
 APP_NAME = "Game Soundboard"
-APP_VERSION = "1.1"
+APP_VERSION = "1.2"
 SAMPLE_RATE = 48000
 BLOCK_SIZE = 960
 SUPPORTED_FILES = (".wav", ".mp3", ".ogg", ".flac", ".m4a", ".aac", ".wma", ".opus")
