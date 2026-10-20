@@ -18,9 +18,10 @@ from tkinterdnd2 import DND_FILES, TkinterDnD
 
 
 APP_NAME = "Game Soundboard"
-APP_VERSION = "1.2"
+APP_VERSION = "1.3"
 SAMPLE_RATE = 48000
 BLOCK_SIZE = 960
+SHARED_INPUT_HOSTS = ("Windows WASAPI", "Windows DirectSound", "MME")
 SUPPORTED_FILES = (".wav", ".mp3", ".ogg", ".flac", ".m4a", ".aac", ".wma", ".opus")
 WM_HOTKEY = 0x0312
 WM_QUIT = 0x0012
@@ -80,6 +81,8 @@ class AudioEngine:
         self.monitor_mic = False
         self.monitor_sound = True
         self.events = queue.Queue()
+        self.input_sample_rate = SAMPLE_RATE
+        self.input_blocksize = BLOCK_SIZE
 
     @property
     def running(self):
@@ -90,43 +93,65 @@ class AudioEngine:
             and self.output_stream.active
         )
 
-    def start(self, input_device, output_device, monitor_device=None):
+    def start(
+        self,
+        input_device,
+        output_device,
+        monitor_device=None,
+        input_channels=1,
+        input_sample_rate=SAMPLE_RATE,
+    ):
         self.stop_stream()
         self.mic_blocks = queue.Queue(maxsize=8)
         self.monitor_blocks = queue.Queue(maxsize=4)
-        self.input_stream = sd.InputStream(
-            samplerate=SAMPLE_RATE,
-            blocksize=BLOCK_SIZE,
-            device=input_device,
-            channels=1,
-            dtype="float32",
-            latency="low",
-            callback=self._input_callback,
-        )
-        self.output_stream = sd.OutputStream(
-            samplerate=SAMPLE_RATE,
-            blocksize=BLOCK_SIZE,
-            device=output_device,
-            channels=1,
-            dtype="float32",
-            latency="low",
-            callback=self._output_callback,
-        )
-        if monitor_device is not None:
-            self.monitor_stream = sd.OutputStream(
+        self.input_sample_rate = int(input_sample_rate)
+        self.input_blocksize = max(1, round(BLOCK_SIZE * self.input_sample_rate / SAMPLE_RATE))
+        try:
+            self.input_stream = sd.InputStream(
+                samplerate=self.input_sample_rate,
+                blocksize=self.input_blocksize,
+                device=input_device,
+                channels=input_channels,
+                dtype="float32",
+                latency="low",
+                callback=self._input_callback,
+            )
+            self.output_stream = sd.OutputStream(
                 samplerate=SAMPLE_RATE,
                 blocksize=BLOCK_SIZE,
-                device=monitor_device,
+                device=output_device,
                 channels=1,
                 dtype="float32",
                 latency="low",
-                callback=self._monitor_callback,
+                callback=self._output_callback,
             )
+        except Exception:
+            self.stop_stream()
+            raise
+        if monitor_device is not None:
+            try:
+                self.monitor_stream = sd.OutputStream(
+                    samplerate=SAMPLE_RATE,
+                    blocksize=BLOCK_SIZE,
+                    device=monitor_device,
+                    channels=1,
+                    dtype="float32",
+                    latency="low",
+                    callback=self._monitor_callback,
+                )
+            except sd.PortAudioError as exc:
+                self.monitor_stream = None
+                self.events.put(("warning", f"监听设备不可用，已继续输出到虚拟声卡：{exc}"))
         try:
             self.input_stream.start()
             self.output_stream.start()
             if self.monitor_stream is not None:
-                self.monitor_stream.start()
+                try:
+                    self.monitor_stream.start()
+                except sd.PortAudioError as exc:
+                    self.monitor_stream.close()
+                    self.monitor_stream = None
+                    self.events.put(("warning", f"监听设备不可用，已继续输出到虚拟声卡：{exc}"))
         except Exception:
             self.stop_stream()
             raise
@@ -155,7 +180,13 @@ class AudioEngine:
     def _input_callback(self, indata, _frames, _time_info, status):
         if status:
             self.events.put(("warning", str(status)))
-        block = indata[:, 0].copy()
+        # Normalize capture to mono at the mixer's sample rate.
+        block = indata.mean(axis=1, dtype=np.float32) if indata.shape[1] > 1 else indata[:, 0].copy()
+        if self.input_sample_rate != SAMPLE_RATE and len(block) > 1:
+            target_length = max(1, round(len(block) * SAMPLE_RATE / self.input_sample_rate))
+            source_x = np.arange(len(block), dtype=np.float32)
+            target_x = np.linspace(0, len(block) - 1, target_length, dtype=np.float32)
+            block = np.interp(target_x, source_x, block).astype(np.float32)
         try:
             self.mic_blocks.put_nowait(block)
         except queue.Full:
@@ -473,7 +504,8 @@ class SoundboardApp(TkinterDnD.Tk):
                 (i, d["name"])
                 for i, d in enumerate(devices)
                 if d["max_input_channels"] > 0
-                and "WASAPI" in hostapis[d["hostapi"]]["name"]
+                and hostapis[d["hostapi"]]["name"] in SHARED_INPUT_HOSTS
+                and self.is_physical_input_name(d["name"])
                 and self.device_supports_rate(i, is_input=True)
             ]
             compatible_outputs = [
@@ -483,7 +515,20 @@ class SoundboardApp(TkinterDnD.Tk):
                 and "WASAPI" in hostapis[d["hostapi"]]["name"]
                 and self.device_supports_rate(i, is_input=False)
             ]
-            self.input_devices = [device for device in compatible_inputs if "cable" not in device[1].lower()]
+            # Shared capture lets Windows coordinate Bluetooth recording with
+            # game playback. Raw WDM-KS pins can interrupt that playback path.
+            input_by_host = {
+                host: [
+                    device
+                    for device in compatible_inputs
+                    if hostapis[devices[device[0]]["hostapi"]]["name"] == host
+                ]
+                for host in SHARED_INPUT_HOSTS
+            }
+            self.input_devices = next(
+                (candidates for candidates in input_by_host.values() if candidates),
+                [],
+            )
             self.output_devices = [device for device in compatible_outputs if "cable input" in device[1].lower()]
             self.monitor_devices = [device for device in compatible_outputs if "cable" not in device[1].lower()]
             self.input_combo["values"] = [self.device_label(x) for x in self.input_devices]
@@ -502,7 +547,7 @@ class SoundboardApp(TkinterDnD.Tk):
 
             if not self.input_var.get() and self.input_devices:
                 default_input = sd.default.device[0]
-                default_device = self.find_device(self.input_devices, default_input)
+                default_device = self.find_input_device(self.input_devices, default_input)
                 self.input_var.set(self.device_label(default_device))
             if not self.output_var.get() and self.output_devices:
                 default_output = sd.default.device[1]
@@ -526,17 +571,54 @@ class SoundboardApp(TkinterDnD.Tk):
             kind = "虚拟声卡输出"
         elif "cable output" in lowered:
             kind = "虚拟声卡输入"
-        elif any(word in lowered for word in ("microphone", "麦克风", "mic array")):
+        elif sd.query_devices(device[0])["max_input_channels"] > 0:
             kind = "麦克风"
         else:
             kind = "耳机/扬声器"
         return f"{kind} | {name}  [{device[0]}]"
 
     @staticmethod
-    def device_supports_rate(index, is_input):
+    def is_physical_input_name(name):
+        lowered = name.lower()
+        # Bluetooth capture endpoints may be named only "Headphones"/"耳机".
+        # Their input-channel capability, rather than a microphone keyword,
+        # identifies them as capture devices.
+        return not any(
+            token in lowered
+            for token in ("cable", "vb-audio", "virtual", "point", "stereo mix", "立体声混音", "mapper", "映射器")
+        )
+
+    @staticmethod
+    def input_channel_count(index):
+        return 1
+
+    @classmethod
+    def input_sample_rate(cls, index):
+        device = sd.query_devices(index)
+        preferred = int(round(device["default_samplerate"]))
+        candidates = (SAMPLE_RATE, preferred, 44100, 16000, 8000)
+        seen = set()
+        for rate in candidates:
+            if rate in seen or rate <= 0:
+                continue
+            seen.add(rate)
+            try:
+                sd.check_input_settings(
+                    device=index,
+                    channels=cls.input_channel_count(index),
+                    dtype="float32",
+                    samplerate=rate,
+                )
+                return rate
+            except sd.PortAudioError:
+                continue
+        return None
+
+    @classmethod
+    def device_supports_rate(cls, index, is_input):
         try:
             if is_input:
-                sd.check_input_settings(device=index, channels=1, dtype="float32", samplerate=SAMPLE_RATE)
+                return cls.input_sample_rate(index) is not None
             else:
                 sd.check_output_settings(device=index, channels=1, dtype="float32", samplerate=SAMPLE_RATE)
             return True
@@ -545,7 +627,42 @@ class SoundboardApp(TkinterDnD.Tk):
 
     @staticmethod
     def find_device(devices, index):
-        return next((d for d in devices if d[0] == index), devices[0])
+        if not devices:
+            return None
+        direct = next((d for d in devices if d[0] == index), None)
+        if direct is not None:
+            return direct
+        try:
+            default_name = sd.query_devices(index)["name"]
+        except Exception:
+            default_name = None
+        return next((d for d in devices if d[1] == default_name), devices[0])
+
+    @classmethod
+    def find_input_device(cls, devices, index):
+        if not devices:
+            return None
+        try:
+            default_name = sd.query_devices(index)["name"]
+        except Exception:
+            default_name = None
+        if default_name:
+            same_name = next((d for d in devices if d[1] == default_name), None)
+            if same_name is not None:
+                return same_name
+        # PortAudio can report VB-CABLE as the default capture endpoint even
+        # when Windows' microphone setting points to the physical array.
+        # Prefer a built-in microphone in that case; Bluetooth remains a
+        # selectable entry in the combobox.
+        return next(
+            (
+                d
+                for d in devices
+                if any(token in d[1].lower() for token in ("microphone", "麦克风", "mic array"))
+                and not any(token in d[1].lower() for token in ("hands-free", "headset", "耳机"))
+            ),
+            devices[0],
+        )
 
     @staticmethod
     def prefer_wasapi(devices, exact_name=None):
@@ -577,11 +694,30 @@ class SoundboardApp(TkinterDnD.Tk):
                 if monitor_device == self.selected_index(self.output_var.get()):
                     messagebox.showwarning(APP_NAME, "监听输出不能与 CABLE Input 相同，请选择耳机或扬声器。")
                     return
+            input_device = self.selected_index(self.input_var.get())
+            input_sample_rate = self.input_sample_rate(input_device)
+            if input_sample_rate is None:
+                raise RuntimeError("所选麦克风没有可用的采样率")
+            input_name = sd.query_devices(input_device)["name"]
+            if monitor_device is not None and input_sample_rate < SAMPLE_RATE:
+                monitor_name = sd.query_devices(monitor_device)["name"]
+                if input_name == monitor_name:
+                    monitor_device = None
+                    self.engine.events.put(
+                        (
+                            "warning",
+                            "蓝牙麦克风与本机监听使用同一耳机，已关闭本机监听；混音仍继续输出到 CABLE。",
+                        )
+                    )
             self.engine.start(
-                self.selected_index(self.input_var.get()),
+                input_device,
                 self.selected_index(self.output_var.get()),
                 monitor_device,
+                self.input_channel_count(input_device),
+                input_sample_rate,
             )
+            if not self.engine.running:
+                raise RuntimeError("输入设备启动后立即停止，请重新选择麦克风")
             self.start_button.configure(text="停止混音")
             self.status_var.set("正在向虚拟声卡输出")
             self.save_config()
@@ -1050,14 +1186,19 @@ class SoundboardApp(TkinterDnD.Tk):
         if not saved_name:
             return
         match = next((d for d in devices if d[1] == saved_name), None)
+        if match is None and "Hands-Free" in saved_name:
+            # Keep a user's Bluetooth selection when moving from a raw driver
+            # name to the shared Windows endpoint for the same headset.
+            headset_name = saved_name.rsplit("(", 1)[-1].rstrip(")")
+            match = next((d for d in devices if d[1].endswith(f"({headset_name})")), None)
         if match:
             variable.set(self.device_label(match))
 
     def save_config(self):
         try:
-            input_name = self.input_var.get().split("] ", 1)[1] if "] " in self.input_var.get() else ""
-            output_name = self.output_var.get().split("] ", 1)[1] if "] " in self.output_var.get() else ""
-            monitor_name = self.monitor_var.get().split("] ", 1)[1] if "] " in self.monitor_var.get() else ""
+            input_name = self.device_name(self.input_var.get())
+            output_name = self.device_name(self.output_var.get())
+            monitor_name = self.device_name(self.monitor_var.get())
             config = {
                 "input_device": input_name,
                 "output_device": output_name,
@@ -1074,6 +1215,12 @@ class SoundboardApp(TkinterDnD.Tk):
             self.config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
         except OSError:
             pass
+
+    @staticmethod
+    def device_name(label):
+        if " | " not in label or "  [" not in label:
+            return ""
+        return label.split(" | ", 1)[1].rsplit("  [", 1)[0]
 
     def on_close(self):
         self.hotkey_stop.set()

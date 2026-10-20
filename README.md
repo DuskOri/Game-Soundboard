@@ -1,6 +1,6 @@
 # Game Soundboard
 
-当前版本：`v1.2`
+当前版本：`v1.3`
 
 [查看完整更新日志](CHANGELOG.md)
 
