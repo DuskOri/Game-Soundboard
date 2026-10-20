@@ -286,6 +286,8 @@ class SoundboardApp(TkinterDnD.Tk):
 
         outer = ttk.Frame(self, padding=16)
         outer.pack(fill="both", expand=True)
+        self.register_drop_target(self)
+        self.register_drop_target(outer)
 
         device_box = ttk.LabelFrame(outer, text="音频设备", padding=12)
         device_box.pack(fill="x")
@@ -330,6 +332,7 @@ class SoundboardApp(TkinterDnD.Tk):
 
         tabs = ttk.Frame(outer)
         tabs.pack(fill="x", pady=(0, 6))
+        self.register_drop_target(tabs)
         ttk.Button(tabs, text="‹", width=3, command=lambda: self.scroll_tabs(-1)).pack(side="left")
         self.tabs_canvas = tk.Canvas(tabs, height=34, highlightthickness=0)
         self.tabs_canvas.pack(side="left", fill="x", expand=True, padx=4)
@@ -345,6 +348,7 @@ class SoundboardApp(TkinterDnD.Tk):
 
         list_frame = ttk.Frame(outer)
         list_frame.pack(fill="both", expand=True)
+        self.register_drop_target(list_frame)
         list_frame.columnconfigure(0, weight=1)
         list_frame.rowconfigure(0, weight=1)
         self.listbox = tk.Listbox(list_frame, activestyle="dotbox", selectmode="browse", font=("Segoe UI", 10))
@@ -353,14 +357,14 @@ class SoundboardApp(TkinterDnD.Tk):
         self.listbox.bind("<ButtonPress-1>", self.begin_audio_drag, add="+")
         self.bind_all("<B1-Motion>", self.update_audio_drag, add="+")
         self.bind_all("<ButtonRelease-1>", self.finish_audio_drag, add="+")
-        self.listbox.drop_target_register(DND_FILES)
-        self.listbox.dnd_bind("<<Drop>>", self.on_drop)
+        self.register_drop_target(self.listbox)
         scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.listbox.yview)
         scrollbar.grid(row=0, column=1, sticky="ns")
         self.listbox.configure(yscrollcommand=scrollbar.set)
 
         buttons = ttk.Frame(outer, padding=(0, 10, 0, 0))
         buttons.pack(fill="x")
+        self.register_drop_target(buttons)
         ttk.Button(buttons, text="新增语音包", command=self.create_pack).pack(side="left")
         ttk.Button(buttons, text="添加音频", command=self.add_files).pack(side="left")
         ttk.Button(buttons, text="刷新素材库", command=self.refresh_library).pack(side="left", padx=8)
@@ -601,6 +605,10 @@ class SoundboardApp(TkinterDnD.Tk):
         )
         if paths:
             self.import_paths(paths)
+
+    def register_drop_target(self, widget):
+        widget.drop_target_register(DND_FILES)
+        widget.dnd_bind("<<Drop>>", self.on_drop)
 
     def on_drop(self, event):
         paths = self.tk.splitlist(event.data)
