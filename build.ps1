@@ -5,6 +5,7 @@ $distDir = Join-Path $projectDir "dist\current"
 $specDir = Join-Path $buildDir "spec"
 $workDir = Join-Path $buildDir "work"
 $ffmpeg = (Get-Command ffmpeg.exe -ErrorAction Stop).Source
+$catalog = Join-Path $projectDir "soundpacks\catalog.json"
 New-Item -ItemType Directory -Path $specDir -Force | Out-Null
 
 Push-Location $projectDir
@@ -15,9 +16,9 @@ try {
         --distpath "$distDir" `
         --workpath "$workDir" `
         --add-binary "$ffmpeg;." `
+        --add-data "$catalog;soundpacks" `
         --collect-all sounddevice `
         --collect-all tkinterdnd2 `
-        --exclude-module ssl `
         app.py
     if ($LASTEXITCODE -ne 0) {
         throw "PyInstaller failed with exit code $LASTEXITCODE"

@@ -16,13 +16,16 @@ import numpy as np
 import sounddevice as sd
 from tkinterdnd2 import DND_FILES, TkinterDnD
 
+from online_packs import AUDIO_EXTENSIONS
+from online_packs_ui import OnlinePacksDialog
+
 
 APP_NAME = "Game Soundboard"
-APP_VERSION = "1.3"
+APP_VERSION = "1.4"
 SAMPLE_RATE = 48000
 BLOCK_SIZE = 960
 SHARED_INPUT_HOSTS = ("Windows WASAPI", "Windows DirectSound", "MME")
-SUPPORTED_FILES = (".wav", ".mp3", ".ogg", ".flac", ".m4a", ".aac", ".wma", ".opus")
+SUPPORTED_FILES = AUDIO_EXTENSIONS
 WM_HOTKEY = 0x0312
 WM_QUIT = 0x0012
 PM_REMOVE = 0x0001
@@ -58,8 +61,12 @@ def library_dir() -> Path:
 
 
 def ffmpeg_path() -> str:
-    bundled = app_dir() / "ffmpeg.exe"
-    return str(bundled) if bundled.exists() else "ffmpeg"
+    resources = Path(getattr(sys, "_MEIPASS", app_dir()))
+    for root in (resources, app_dir()):
+        bundled = root / "ffmpeg.exe"
+        if bundled.exists():
+            return str(bundled)
+    return "ffmpeg"
 
 
 class AudioEngine:
@@ -285,6 +292,7 @@ class SoundboardApp(TkinterDnD.Tk):
         self.drag_audio_index = None
         self.drag_target_pack = None
         self.config_path = data_dir() / "settings.json"
+        self.online_dialog = None
         self.hotkey_stop = threading.Event()
         self.hotkey_thread = None
         self.hotkey_commands = queue.Queue()
@@ -376,6 +384,7 @@ class SoundboardApp(TkinterDnD.Tk):
         self.pack_menu = tk.Menu(self.pack_menu_button, tearoff=False)
         self.pack_menu_button.configure(menu=self.pack_menu)
         self.pack_menu_button.pack(side="left", padx=(4, 0))
+        ttk.Button(tabs, text="在线音效包", command=self.open_online_packs).pack(side="left", padx=(8, 0))
 
         list_frame = ttk.Frame(outer)
         list_frame.pack(fill="both", expand=True)
@@ -411,6 +420,22 @@ class SoundboardApp(TkinterDnD.Tk):
             text="按住音频拖到上方标签可移动；Num1～Num9 播放前 9 条；Alt+←/→ 切换语音包；Num0 停止。",
             foreground="#555555",
         ).pack(fill="x", pady=(12, 0))
+
+    def open_online_packs(self):
+        if self.online_dialog is not None and self.online_dialog.winfo_exists():
+            self.online_dialog.lift()
+            return
+        resources = Path(getattr(sys, "_MEIPASS", app_dir()))
+        self.online_dialog = OnlinePacksDialog(
+            self, library_dir(), data_dir(), resources / "soundpacks" / "catalog.json",
+            self.online_pack_installed,
+        )
+
+    def online_pack_installed(self, pack):
+        self.current_pack = pack.name
+        self.refresh_library()
+        self.save_config()
+        self.status_var.set(f"在线音效包“{pack.title}”已安装")
 
     def start_hotkeys(self):
         self.hotkey_thread = threading.Thread(target=self.hotkey_worker, daemon=True)
@@ -1223,6 +1248,9 @@ class SoundboardApp(TkinterDnD.Tk):
         return label.split(" | ", 1)[1].rsplit("  [", 1)[0]
 
     def on_close(self):
+        if self.online_dialog is not None and self.online_dialog.winfo_exists() and self.online_dialog.busy:
+            self.online_dialog.close(callback=self.on_close)
+            return
         self.hotkey_stop.set()
         self.save_config()
         self.engine.stop_stream()

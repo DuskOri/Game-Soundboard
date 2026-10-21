@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "packs": [
+    {
+      "id": "kangshen",
+      "name": "康神",
+      "title": "康神",
+      "version": "1.0",
+      "description": "康神语音与常用音效，包含 LETSGO、NICE、兰花草等素材。",
+      "url": "https://github.com/DuskOri/Game-Soundboard/releases/download/soundpacks-v1/kangshen-1.0.zip",
+      "size": 731484,
+      "sha256": "5c58159d7f847afc4ab217a52ac9b14d042f4c654e9c8f0e5f53e308333f9027",
+      "file_count": 5
+    },
+    {
+      "id": "leige",
+      "name": "磊哥",
+      "title": "磊哥",
+      "version": "1.0",
+      "description": "磊哥语音包，包含“尽力了”。",
+      "url": "https://github.com/DuskOri/Game-Soundboard/releases/download/soundpacks-v1/leige-1.0.zip",
+      "size": 58135,
+      "sha256": "57228e008e5ec5df2bbf0be0303e2c2101056495e21e7878f90d3c115c88d9a9",
+      "file_count": 1
+    },
+    {
+      "id": "rongyu",
+      "name": "荣誉",
+      "title": "荣誉",
+      "version": "1.0",
+      "description": "游戏语音包，包含 vamos、秒选、卡了、惜败等素材。",
+      "url": "https://github.com/DuskOri/Game-Soundboard/releases/download/soundpacks-v1/rongyu-1.0.zip",
+      "size": 428996,
+      "sha256": "cac278725c3de306334d17e1a67c6cc887e7f68e594b85235626059240c246e0",
+      "file_count": 6
+    },
+    {
+      "id": "music",
+      "name": "music",
+      "title": "音乐合集",
+      "version": "1.0",
+      "description": "现有音乐素材合集，包含夜露小曲及农版音乐，共 3 首。",
+      "url": "https://github.com/DuskOri/Game-Soundboard/releases/download/soundpacks-v1/music-1.0.zip",
+      "size": 75390754,
+      "sha256": "f133534f67af784599d8d2de2794fa443188f70f76792ca50483521d57484f94",
+      "file_count": 3
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+[
+  {"id": "kangshen", "name": "康神", "title": "康神", "version": "1.0", "description": "康神语音与常用音效，包含 LETSGO、NICE、兰花草等素材。"},
+  {"id": "leige", "name": "磊哥", "title": "磊哥", "version": "1.0", "description": "磊哥语音包，包含“尽力了”。"},
+  {"id": "rongyu", "name": "荣誉", "title": "荣誉", "version": "1.0", "description": "游戏语音包，包含 vamos、秒选、卡了、惜败等素材。"},
+  {"id": "music", "name": "music", "title": "音乐合集", "version": "1.0", "description": "现有音乐素材合集，包含夜露小曲及农版音乐，共 3 首。"}
+]
