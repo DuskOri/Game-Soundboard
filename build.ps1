@@ -6,17 +6,20 @@ $specDir = Join-Path $buildDir "spec"
 $workDir = Join-Path $buildDir "work"
 $ffmpeg = (Get-Command ffmpeg.exe -ErrorAction Stop).Source
 $catalog = Join-Path $projectDir "soundpacks\catalog.json"
+$icon = Join-Path $projectDir "assets\soundboard.ico"
 New-Item -ItemType Directory -Path $specDir -Force | Out-Null
 
 Push-Location $projectDir
 try {
     python -m PyInstaller --noconfirm --clean --windowed --uac-admin --onedir `
         --name "GameSoundboard" `
+        --icon "$icon" `
         --specpath "$specDir" `
         --distpath "$distDir" `
         --workpath "$workDir" `
         --add-binary "$ffmpeg;." `
         --add-data "$catalog;soundpacks" `
+        --add-data "$icon;assets" `
         --collect-all sounddevice `
         --collect-all tkinterdnd2 `
         app.py

@@ -30,6 +30,11 @@ def _configure_api():
     user.DefWindowProcW.restype = LRESULT
     user.LoadIconW.argtypes = [wintypes.HINSTANCE, ctypes.c_void_p]
     user.LoadIconW.restype = wintypes.HICON
+    user.LoadImageW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT,
+        ctypes.c_int, ctypes.c_int, wintypes.UINT]
+    user.LoadImageW.restype = wintypes.HANDLE
+    user.DestroyIcon.argtypes = [wintypes.HICON]
+    user.GetSystemMetrics.argtypes = [ctypes.c_int]
     user.CreatePopupMenu.restype = wintypes.HMENU
     user.AppendMenuW.argtypes = [wintypes.HMENU, wintypes.UINT, ctypes.c_size_t, wintypes.LPCWSTR]
     user.TrackPopupMenu.argtypes = [wintypes.HMENU, wintypes.UINT, ctypes.c_int, ctypes.c_int,
@@ -87,10 +92,12 @@ class _NotifyIconData(ctypes.Structure):
 
 
 class TrayIcon:
-    def __init__(self, root, on_show, on_exit):
+    def __init__(self, root, on_show, on_exit, icon_path=None):
         self.root, self.on_show, self.on_exit = root, on_show, on_exit
         self.hwnd = None
         self.hicon = None
+        self.icon_path = icon_path
+        self.owns_icon = False
         self._wndproc = None
         self._class_name = "GameSoundboardTrayWindow"
         self.taskbar_created = ctypes.windll.user32.RegisterWindowMessageW("TaskbarCreated")
@@ -108,7 +115,12 @@ class TrayIcon:
         self.hwnd = user32.CreateWindowExW(0, class_name, class_name, 0, 0, 0, 0, 0, 0, 0, wc.hInstance, None)
         if not self.hwnd:
             raise ctypes.WinError()
-        self.hicon = user32.LoadIconW(None, ctypes.c_void_p(32512))
+        if self.icon_path is not None:
+            self.hicon = user32.LoadImageW(None, str(self.icon_path), 1,
+                user32.GetSystemMetrics(49), user32.GetSystemMetrics(50), 0x0010)
+            self.owns_icon = bool(self.hicon)
+        if not self.hicon:
+            self.hicon = user32.LoadIconW(None, ctypes.c_void_p(32512))
         self._add_icon()
 
     def _add_icon(self):
@@ -160,3 +172,7 @@ class TrayIcon:
         ctypes.windll.shell32.Shell_NotifyIconW(NIM_DELETE, ctypes.byref(data))
         ctypes.windll.user32.DestroyWindow(self.hwnd)
         self.hwnd = None
+        if self.owns_icon:
+            ctypes.windll.user32.DestroyIcon(self.hicon)
+            self.hicon = None
+            self.owns_icon = False

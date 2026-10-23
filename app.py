@@ -273,10 +273,13 @@ class SoundboardApp(TkinterDnD.Tk):
     def __init__(self):
         super().__init__()
         self.title(f"{APP_NAME} v{APP_VERSION}")
+        icon_path = Path(getattr(sys, "_MEIPASS", app_dir())) / "assets" / "soundboard.ico"
+        if icon_path.exists():
+            self.iconbitmap(default=str(icon_path))
         self.geometry("820x590")
         self.minsize(700, 520)
         self.protocol("WM_DELETE_WINDOW", self.on_close)
-        self.tray = TrayIcon(self, self.show_from_tray, self.exit_app)
+        self.tray = TrayIcon(self, self.show_from_tray, self.exit_app, icon_path)
         self.hidden_to_tray = False
 
         self.engine = AudioEngine()
