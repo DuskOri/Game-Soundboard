@@ -18,10 +18,11 @@ from tkinterdnd2 import DND_FILES, TkinterDnD
 
 from online_packs import AUDIO_EXTENSIONS
 from online_packs_ui import OnlinePacksDialog
+from windows_shell import SingleInstance, TrayIcon
 
 
 APP_NAME = "Game Soundboard"
-APP_VERSION = "1.4"
+APP_VERSION = "1.5"
 SAMPLE_RATE = 48000
 BLOCK_SIZE = 960
 SHARED_INPUT_HOSTS = ("Windows WASAPI", "Windows DirectSound", "MME")
@@ -275,6 +276,8 @@ class SoundboardApp(TkinterDnD.Tk):
         self.geometry("820x590")
         self.minsize(700, 520)
         self.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.tray = TrayIcon(self, self.show_from_tray, self.exit_app)
+        self.hidden_to_tray = False
 
         self.engine = AudioEngine()
         self.files = []
@@ -1248,14 +1251,44 @@ class SoundboardApp(TkinterDnD.Tk):
         return label.split(" | ", 1)[1].rsplit("  [", 1)[0]
 
     def on_close(self):
+        if not getattr(self, "allow_exit", False):
+            self.hidden_to_tray = True
+            self.save_config()
+            if self.online_dialog is not None and self.online_dialog.winfo_exists():
+                self.online_dialog.withdraw()
+            self.withdraw()
+            self.status_var.set("已最小化到系统托盘")
+            return
         if self.online_dialog is not None and self.online_dialog.winfo_exists() and self.online_dialog.busy:
-            self.online_dialog.close(callback=self.on_close)
+            self.online_dialog.close(callback=self.exit_app)
             return
         self.hotkey_stop.set()
         self.save_config()
         self.engine.stop_stream()
+        self.tray.delete()
         self.destroy()
+
+    def show_from_tray(self):
+        self.deiconify()
+        self.state("normal")
+        self.lift()
+        self.focus_force()
+        if self.online_dialog is not None and self.online_dialog.winfo_exists():
+            self.online_dialog.deiconify()
+        self.hidden_to_tray = False
+
+    def exit_app(self):
+        self.allow_exit = True
+        self.on_close()
 
 
 if __name__ == "__main__":
-    SoundboardApp().mainloop()
+    instance = SingleInstance("Global\\GameSoundboard.SingleInstance.v1")
+    if instance.already_exists:
+        ctypes.windll.user32.MessageBoxW(None, "Game Soundboard 已经在运行中。", APP_NAME, 0x00000030)
+        instance.close()
+        raise SystemExit(0)
+    try:
+        SoundboardApp().mainloop()
+    finally:
+        instance.close()
