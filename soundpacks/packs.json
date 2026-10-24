@@ -1,6 +1,72 @@
 [
-  {"id": "kangshen", "name": "康神", "title": "康神", "version": "1.0", "description": "康神语音与常用音效，包含 LETSGO、NICE、兰花草等素材。"},
-  {"id": "leige", "name": "磊哥", "title": "磊哥", "version": "1.0", "description": "磊哥语音包，包含“尽力了”。"},
-  {"id": "rongyu", "name": "荣誉", "title": "荣誉", "version": "1.0", "description": "游戏语音包，包含 vamos、秒选、卡了、惜败等素材。"},
-  {"id": "music", "name": "music", "title": "音乐合集", "version": "1.0", "description": "现有音乐素材合集，包含夜露小曲及农版音乐，共 3 首。"}
+  {
+    "id": "kangshen",
+    "name": "康神",
+    "title": "康神",
+    "version": "1.0",
+    "description": "康神语音与常用音效，包含 LETSGO、NICE、兰花草等素材。"
+  },
+  {
+    "id": "leige",
+    "name": "磊哥",
+    "title": "磊哥",
+    "version": "1.0",
+    "description": "磊哥语音包，包含“尽力了”。"
+  },
+  {
+    "id": "rongyu",
+    "name": "荣誉",
+    "title": "荣誉",
+    "version": "1.1",
+    "description": "荣誉游戏语音包，包含 vamos、秒选、卡键、吞子弹了、被狗运了等 11 条素材。"
+  },
+  {
+    "id": "music",
+    "name": "music",
+    "title": "音乐合集",
+    "version": "1.0",
+    "description": "现有音乐素材合集，包含夜露小曲及农版音乐，共 3 首。"
+  },
+  {
+    "id": "buzhihuowu",
+    "name": "不知火舞",
+    "title": "不知火舞",
+    "version": "1.0",
+    "description": "不知火舞趣味语音，包含安迪、哒咩、嘎嘎滴辣虾等 8 条素材。"
+  },
+  {
+    "id": "dazhao",
+    "name": "大招语音",
+    "title": "大招语音",
+    "version": "1.0",
+    "description": "夜露、壹决、蝰蛇等角色台词，共 5 条。"
+  },
+  {
+    "id": "feibi",
+    "name": "菲比",
+    "title": "菲比",
+    "version": "1.0",
+    "description": "菲比语音合集，包含菲比秋比、愿睡主护佑等 6 条素材。"
+  },
+  {
+    "id": "keli",
+    "name": "可莉",
+    "title": "可莉",
+    "version": "1.0",
+    "description": "可莉语音合集，包含蹦蹦炸弹、火力全开、可莉登场等 7 条素材。"
+  },
+  {
+    "id": "rongyu-meibanfa",
+    "name": "荣誉没办法合集",
+    "title": "荣誉没办法合集",
+    "version": "1.0",
+    "description": "荣誉没办法系列，包含 1打3没办法、被队友闪了没办法等 9 条素材。"
+  },
+  {
+    "id": "wawa",
+    "name": "瓦瓦",
+    "title": "瓦瓦",
+    "version": "1.0",
+    "description": "瓦瓦游戏语音，包含刀马刀马刀马诶、贤者我没事、颗秒等 5 条素材。"
+  }
 ]

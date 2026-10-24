@@ -27,12 +27,12 @@
       "id": "rongyu",
       "name": "荣誉",
       "title": "荣誉",
-      "version": "1.0",
-      "description": "游戏语音包，包含 vamos、秒选、卡了、惜败等素材。",
-      "url": "https://github.com/DuskOri/Game-Soundboard/releases/download/soundpacks-v1/rongyu-1.0.zip",
-      "size": 428996,
-      "sha256": "cac278725c3de306334d17e1a67c6cc887e7f68e594b85235626059240c246e0",
-      "file_count": 6
+      "version": "1.1",
+      "description": "荣誉游戏语音包，包含 vamos、秒选、卡键、吞子弹了、被狗运了等 11 条素材。",
+      "url": "https://github.com/DuskOri/Game-Soundboard/releases/download/soundpacks-v1/rongyu-1.1.zip",
+      "size": 418894,
+      "sha256": "e94f4c0af1cfc9ddbe90bdae0d34ae1404d878cbdb57c3b377e4360885fdf96c",
+      "file_count": 11
     },
     {
       "id": "music",
@@ -44,6 +44,72 @@
       "size": 75390754,
       "sha256": "f133534f67af784599d8d2de2794fa443188f70f76792ca50483521d57484f94",
       "file_count": 3
+    },
+    {
+      "id": "buzhihuowu",
+      "name": "不知火舞",
+      "title": "不知火舞",
+      "version": "1.0",
+      "description": "不知火舞趣味语音，包含安迪、哒咩、嘎嘎滴辣虾等 8 条素材。",
+      "url": "https://github.com/DuskOri/Game-Soundboard/releases/download/soundpacks-v1/buzhihuowu-1.0.zip",
+      "size": 309883,
+      "sha256": "6c2b2e462815c45232820268d8a8584374509f6fd897bb50e689a7e5f0c068e8",
+      "file_count": 8
+    },
+    {
+      "id": "dazhao",
+      "name": "大招语音",
+      "title": "大招语音",
+      "version": "1.0",
+      "description": "夜露、壹决、蝰蛇等角色台词，共 5 条。",
+      "url": "https://github.com/DuskOri/Game-Soundboard/releases/download/soundpacks-v1/dazhao-1.0.zip",
+      "size": 242045,
+      "sha256": "a1511656d52d0d8924bfefe36e164996f3006c14294815cf6945134eb8f631bb",
+      "file_count": 5
+    },
+    {
+      "id": "feibi",
+      "name": "菲比",
+      "title": "菲比",
+      "version": "1.0",
+      "description": "菲比语音合集，包含菲比秋比、愿睡主护佑等 6 条素材。",
+      "url": "https://github.com/DuskOri/Game-Soundboard/releases/download/soundpacks-v1/feibi-1.0.zip",
+      "size": 277980,
+      "sha256": "7d53064dbdf2a433e49ca144a7c2a30d123abbd9e8c7a57ac88f2530aca87e20",
+      "file_count": 6
+    },
+    {
+      "id": "keli",
+      "name": "可莉",
+      "title": "可莉",
+      "version": "1.0",
+      "description": "可莉语音合集，包含蹦蹦炸弹、火力全开、可莉登场等 7 条素材。",
+      "url": "https://github.com/DuskOri/Game-Soundboard/releases/download/soundpacks-v1/keli-1.0.zip",
+      "size": 171869,
+      "sha256": "b23b3a7adc2a971891ea37f1e4397c54a8b41a73ab151a03d5932cfb21737dff",
+      "file_count": 7
+    },
+    {
+      "id": "rongyu-meibanfa",
+      "name": "荣誉没办法合集",
+      "title": "荣誉没办法合集",
+      "version": "1.0",
+      "description": "荣誉没办法系列，包含 1打3没办法、被队友闪了没办法等 9 条素材。",
+      "url": "https://github.com/DuskOri/Game-Soundboard/releases/download/soundpacks-v1/rongyu-meibanfa-1.0.zip",
+      "size": 221236,
+      "sha256": "1746934fed7c2e74d99761a433883329f96ab30cd5434b465da1755feae93974",
+      "file_count": 9
+    },
+    {
+      "id": "wawa",
+      "name": "瓦瓦",
+      "title": "瓦瓦",
+      "version": "1.0",
+      "description": "瓦瓦游戏语音，包含刀马刀马刀马诶、贤者我没事、颗秒等 5 条素材。",
+      "url": "https://github.com/DuskOri/Game-Soundboard/releases/download/soundpacks-v1/wawa-1.0.zip",
+      "size": 181198,
+      "sha256": "abb38c4aa00f8917d4a3f9662639a1c69e782ded6ac8e5ffe4094ddcd2fb3625",
+      "file_count": 5
     }
   ]
 }
